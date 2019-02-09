@@ -14,8 +14,8 @@ dependencies {
 
     compile "nz.co.jedsimson.lgp:LGP:4.2"
     compile "nz.co.jedsimson.lgp:LGP:4.2:sources"
-    compile "nz.co.jedsimson.lgp:LGP-lib:1.0"
-    compile "nz.co.jedsimson.lgp:LGP-lib:1.0:sources"
+    compile "nz.co.jedsimson.lgp:LGP-lib:1.1"
+    compile "nz.co.jedsimson.lgp:LGP-lib:1.1:sources"
 }
 
 compileKotlin {
