@@ -17,8 +17,8 @@ import nz.co.jedsimson.lgp.core.program.Outputs
 import nz.co.jedsimson.lgp.lib.base.BaseProgram
 import nz.co.jedsimson.lgp.lib.base.BaseProgramOutputResolvers
 import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier
+import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
-import nz.co.jedsimson.lgp.lib.generators.RandomProgramGenerator
 
 import java.io.BufferedReader
 import java.io.InputStream
@@ -125,7 +125,7 @@ class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Sing
                         RandomInstructionGenerator(environment)
                     },
                     CoreModuleType.ProgramGenerator to { environment ->
-                        RandomProgramGenerator(
+                        EffectiveProgramGenerator(
                             environment,
                             sentinelTrueValue = 1.0,
                             outputRegisterIndices = listOf(0),

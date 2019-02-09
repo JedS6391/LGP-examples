@@ -20,8 +20,8 @@ import nz.co.jedsimson.lgp.core.program.Outputs
 import nz.co.jedsimson.lgp.lib.base.BaseProgram
 import nz.co.jedsimson.lgp.lib.base.BaseProgramOutputResolvers
 import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier
+import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
-import nz.co.jedsimson.lgp.lib.generators.RandomProgramGenerator
 
 /*
  * An example of setting up an environment to use LGP to find programs for the function `x^2 + 2x + 2`.
@@ -120,7 +120,7 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
                         RandomInstructionGenerator(environment)
                     },
                     CoreModuleType.ProgramGenerator to { environment ->
-                        RandomProgramGenerator(
+                        EffectiveProgramGenerator(
                             environment,
                             sentinelTrueValue = 1.0,
                             outputRegisterIndices = listOf(0),

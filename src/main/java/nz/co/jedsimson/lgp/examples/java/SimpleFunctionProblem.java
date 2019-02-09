@@ -22,13 +22,12 @@ import nz.co.jedsimson.lgp.core.modules.ModuleInformation;
 import nz.co.jedsimson.lgp.core.program.Outputs;
 import nz.co.jedsimson.lgp.core.evolution.operators.TournamentSelection;
 import nz.co.jedsimson.lgp.lib.base.BaseProgramOutputResolvers;
+import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator;
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator;
-import nz.co.jedsimson.lgp.lib.generators.RandomProgramGenerator;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 import java.util.function.Function;
-
 
 /**
  * A re-implementation of {@link SimpleFunctionProblem} to showcase Java interoperability.
@@ -43,7 +42,7 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
     @NotNull
     public Description getDescription() {
         return new Description(
-                "f(x) = x^2 + 2x + 2\n\trange = [-10:10:0.5]"
+            "f(x) = x^2 + 2x + 2\n\trange = [-10:10:0.5]"
         );
     }
 
@@ -54,7 +53,7 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
             @NotNull
             public ModuleInformation getInformation() {
                 return new ModuleInformation(
-                        "Overrides default configuration for this problem."
+                    "Overrides default configuration for this problem."
                 );
             }
 
@@ -66,11 +65,11 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
                 config.setMinimumProgramLength(10);
                 config.setMaximumProgramLength(200);
                 config.setOperations(
-                        Arrays.asList(
-                                "nz.co.jedsimson.lgp.lib.operations.Addition",
-                                "nz.co.jedsimson.lgp.lib.operations.Subtraction",
-                                "nz.co.jedsimson.lgp.lib.operations.Multiplication"
-                        )
+                    Arrays.asList(
+                        "nz.co.jedsimson.lgp.lib.operations.Addition",
+                        "nz.co.jedsimson.lgp.lib.operations.Subtraction",
+                        "nz.co.jedsimson.lgp.lib.operations.Multiplication"
+                    )
                 );
                 config.setConstantsRate(0.5);
                 config.setConstants(Arrays.asList("0.0", "1.0", "2.0"));
@@ -93,8 +92,8 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
     @NotNull
     public ConstantLoader<Double> getConstantLoader() {
         return new GenericConstantLoader<>(
-                this.config.getConstants(),
-                Double::parseDouble
+            this.config.getConstants(),
+            Double::parseDouble
         );
     }
 
@@ -122,50 +121,50 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
 
         modules.put(CoreModuleType.InstructionGenerator, RandomInstructionGenerator::new);
         modules.put(
-                CoreModuleType.ProgramGenerator,
-                (environment) -> new RandomProgramGenerator<>(
-                        environment,
-                        1.0,                                           // sentinelTrueValue
-                        new ArrayList<>(Collections.singletonList(0)), // outputRegisterIndex
-                        BaseProgramOutputResolvers.INSTANCE.singleOutput()
-                )
+            CoreModuleType.ProgramGenerator,
+            (environment) -> new EffectiveProgramGenerator<>(
+                environment,
+                1.0,                                           // sentinelTrueValue
+                new ArrayList<>(Collections.singletonList(0)), // outputRegisterIndex
+                BaseProgramOutputResolvers.INSTANCE.singleOutput()
+            )
         );
         modules.put(
-                CoreModuleType.SelectionOperator,
-                (environment) -> new TournamentSelection<>(
-                        environment,
-                        2            // tournamentSize
-                )
+            CoreModuleType.SelectionOperator,
+            (environment) -> new TournamentSelection<>(
+                environment,
+                2            // tournamentSize
+            )
         );
         modules.put(
-                CoreModuleType.RecombinationOperator,
-                (environment) -> new LinearCrossover<>(
-                        environment,
-                        6,           // maximumSegmentLength
-                        5,           // maximumCrossoverDistance
-                        3            // maximumSegmentLengthDifference
-                )
+            CoreModuleType.RecombinationOperator,
+            (environment) -> new LinearCrossover<>(
+                environment,
+                6,           // maximumSegmentLength
+                5,           // maximumCrossoverDistance
+                3            // maximumSegmentLengthDifference
+            )
         );
         modules.put(
-                CoreModuleType.MacroMutationOperator,
-                (environment) -> new MacroMutationOperator<>(
-                        environment,
-                        0.67,        // insertionRate
-                        0.33         // deletionRate
-                )
+            CoreModuleType.MacroMutationOperator,
+            (environment) -> new MacroMutationOperator<>(
+                environment,
+                0.67,        // insertionRate
+                0.33         // deletionRate
+            )
         );
         modules.put(
-                CoreModuleType.MicroMutationOperator,
-                (environment) -> new MicroMutationOperator<>(
-                        environment,
-                        0.5,         // registerMutationRate
-                        0.5,         // operatorMutationRate
-                        (v) -> v     // constantMutationFunc
-                )
+            CoreModuleType.MicroMutationOperator,
+            (environment) -> new MicroMutationOperator<>(
+                environment,
+                0.5,         // registerMutationRate
+                0.5,         // operatorMutationRate
+                ConstantMutationFunctions.identity()
+            )
         );
         modules.put(
-                CoreModuleType.FitnessContext,
-                SingleOutputFitnessContext::new
+            CoreModuleType.FitnessContext,
+            SingleOutputFitnessContext::new
         );
 
         return new ModuleContainer<>(modules);
@@ -191,7 +190,7 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
                 Double x = it.next();
                 
                 samples.add(
-                        new Sample<>(Collections.singletonList(new Feature<>("x", x)))
+                    new Sample<>(Collections.singletonList(new Feature<>("x", x)))
                 );
             }
 
@@ -209,15 +208,15 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
 
     public void initialiseEnvironment() {
         this.environment = new Environment<>(
-                this.getConfigLoader(),
-                this.getConstantLoader(),
-                this.getOperationLoader(),
-                this.getDefaultValueProvider(),
-                this.getFitnessFunctionProvider(),
-                // resultAggregator
-                null,
-                // randomStateSeed
-                null
+            this.getConfigLoader(),
+            this.getConstantLoader(),
+            this.getOperationLoader(),
+            this.getDefaultValueProvider(),
+            this.getFitnessFunctionProvider(),
+            // resultAggregator
+            null,
+            // randomStateSeed
+            null
         );
 
         this.environment.registerModules(this.getRegisteredModules());
@@ -231,10 +230,10 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
     public SimpleFunctionSolution solve() {
         try {
             DistributedTrainer<Double, Outputs.Single<Double>> runner = new DistributedTrainer<>(
-                    this.environment,
-                    this.model,
-                    // runs
-                    2
+                this.environment,
+                this.model,
+                // runs
+                2
             );
 
             TrainingResult<Double, Outputs.Single<Double>> result = runner.train(this.datasetLoader.load());
@@ -245,7 +244,7 @@ public class SimpleFunctionProblem extends Problem<Double, Outputs.Single<Double
             // The initialisation routines haven't been run.
             try {
                 throw new ProblemNotInitialisedException(
-                        "The initialisation routines for this problem must be run before it can be solved."
+                    "The initialisation routines for this problem must be run before it can be solved."
                 );
             } catch (ProblemNotInitialisedException e) {
                 e.printStackTrace();

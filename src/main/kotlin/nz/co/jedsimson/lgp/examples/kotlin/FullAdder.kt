@@ -23,8 +23,8 @@ import nz.co.jedsimson.lgp.lib.base.BaseProgram
 import nz.co.jedsimson.lgp.lib.base.BaseProgramOutputResolvers
 import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier
 import nz.co.jedsimson.lgp.lib.base.BaseProgramTranslator
+import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
-import nz.co.jedsimson.lgp.lib.generators.RandomProgramGenerator
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -112,7 +112,7 @@ class FullAdderExperiment(
         },
         // Generate programs using the built-in programs generator.
         CoreModuleType.ProgramGenerator to { environment ->
-            RandomProgramGenerator(
+            EffectiveProgramGenerator(
                 environment,
                 sentinelTrueValue = 1.0, // Determines the value that represents a boolean "true".
                 outputRegisterIndices = listOf(6, 7), // Two program outputs
