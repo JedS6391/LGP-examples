@@ -1,20 +1,26 @@
 package nz.co.jedsimson.lgp.examples.kotlin
 
 import kotlinx.coroutines.runBlocking
-import nz.co.jedsimson.lgp.core.environment.*
+import nz.co.jedsimson.lgp.core.environment.DefaultValueProviders
+import nz.co.jedsimson.lgp.core.environment.Environment
 import nz.co.jedsimson.lgp.core.environment.config.Configuration
 import nz.co.jedsimson.lgp.core.environment.config.ConfigurationLoader
 import nz.co.jedsimson.lgp.core.environment.constants.GenericConstantLoader
 import nz.co.jedsimson.lgp.core.environment.dataset.*
 import nz.co.jedsimson.lgp.core.environment.operations.DefaultOperationLoader
 import nz.co.jedsimson.lgp.core.evolution.*
-import nz.co.jedsimson.lgp.core.evolution.fitness.*
-import nz.co.jedsimson.lgp.core.evolution.model.Models
-import nz.co.jedsimson.lgp.core.evolution.operators.*
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessContexts
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessFunctions
+import nz.co.jedsimson.lgp.core.evolution.model.SteadyState
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.macro.MacroMutationOperator
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.ConstantMutationFunctions
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.MicroMutationOperator
+import nz.co.jedsimson.lgp.core.evolution.operators.recombination.linearCrossover.LinearCrossover
+import nz.co.jedsimson.lgp.core.evolution.operators.selection.BinaryTournamentSelection
 import nz.co.jedsimson.lgp.core.evolution.training.DistributedTrainer
-import nz.co.jedsimson.lgp.core.evolution.training.DistributedTrainingJob
-import nz.co.jedsimson.lgp.core.evolution.training.SequentialTrainer
 import nz.co.jedsimson.lgp.core.evolution.training.TrainingResult
+import nz.co.jedsimson.lgp.core.modules.CoreModuleType
+import nz.co.jedsimson.lgp.core.modules.ModuleContainer
 import nz.co.jedsimson.lgp.core.modules.ModuleInformation
 import nz.co.jedsimson.lgp.core.program.Outputs
 import nz.co.jedsimson.lgp.lib.base.BaseProgram
@@ -22,6 +28,8 @@ import nz.co.jedsimson.lgp.lib.base.BaseProgramOutputResolvers
 import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier
 import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
+import nz.co.jedsimson.lgp.core.environment.events.*
+import java.io.File
 
 /*
  * An example of setting up an environment to use LGP to find programs for the function `x^2 + 2x + 2`.
@@ -34,11 +42,11 @@ import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
 // running the problem with a `Trainer` impl.
 data class SimpleFunctionSolution(
         override val problem: String,
-        val result: TrainingResult<Double, Outputs.Single<Double>>
+        val result: TrainingResult<Double, Outputs.Single<Double>, Targets.Single<Double>>
 ) : Solution<Double>
 
 // Define the problem and the necessary components to solve it.
-class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
+class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>, Targets.Single<Double>>() {
     override val name = "Simple Quadratic."
 
     override val description = Description("f(x) = x^2 + 2x + 2\n\trange = [-10:10:0.5]")
@@ -66,7 +74,6 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
             config.numFeatures = 1
             config.microMutationRate = 0.4
             config.macroMutationRate = 0.6
-            config.numOffspring = 10
 
             return config
         }
@@ -79,14 +86,14 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
             parseFunction = String::toDouble
     )
 
-    val datasetLoader = object : DatasetLoader<Double> {
+    val datasetLoader = object : DatasetLoader<Double, Targets.Single<Double>> {
         // x^2 + 2x + 2
         val func = { x: Double -> (x * x) + (2 * x) + 2 }
         val gen = SequenceGenerator()
 
         override val information = ModuleInformation("Generates samples in the range [-10:10:0.5].")
 
-        override fun load(): Dataset<Double> {
+        override fun load(): Dataset<Double, Targets.Single<Double>> {
             val xs = gen.generate(-10.0, 10.0, 0.5, inclusive = true).map { x ->
                 Sample(
                     listOf(Feature(name = "x", value = x))
@@ -114,7 +121,7 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
         FitnessFunctions.MSE
     }
 
-    override val registeredModules = ModuleContainer<Double, Outputs.Single<Double>>(
+    override val registeredModules = ModuleContainer<Double, Outputs.Single<Double>, Targets.Single<Double>>(
             modules = mutableMapOf(
                     CoreModuleType.InstructionGenerator to { environment ->
                         RandomInstructionGenerator(environment)
@@ -128,36 +135,36 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
                         )
                     },
                     CoreModuleType.SelectionOperator to { environment ->
-                        TournamentSelection(environment, tournamentSize = 2)
+                        BinaryTournamentSelection(environment, tournamentSize = 2)
                     },
                     CoreModuleType.RecombinationOperator to { environment ->
                         LinearCrossover(
-                                environment,
-                                maximumSegmentLength = 6,
-                                maximumCrossoverDistance = 5,
-                                maximumSegmentLengthDifference = 3
+                            environment,
+                            maximumSegmentLength = 6,
+                            maximumCrossoverDistance = 5,
+                            maximumSegmentLengthDifference = 3
                         )
                     },
                     CoreModuleType.MacroMutationOperator to { environment ->
                         MacroMutationOperator(
-                                environment,
-                                insertionRate = 0.67,
-                                deletionRate = 0.33
+                            environment,
+                            insertionRate = 0.67,
+                            deletionRate = 0.33
                         )
                     },
                     CoreModuleType.MicroMutationOperator to { environment ->
                         MicroMutationOperator(
-                                environment,
-                                registerMutationRate = 0.5,
-                                operatorMutationRate = 0.5,
-                                // Use identity func. since the probabilities
-                                // of other micro mutations mean that we aren't
-                                // modifying constants.
-                                constantMutationFunc = ConstantMutationFunctions.identity<Double>()
+                            environment,
+                            registerMutationRate = 0.5,
+                            operatorMutationRate = 0.5,
+                            // Use identity func. since the probabilities
+                            // of other micro mutations mean that we aren't
+                            // modifying constants.
+                            constantMutationFunc = ConstantMutationFunctions.identity<Double>()
                         )
                     },
                     CoreModuleType.FitnessContext to { environment ->
-                        SingleOutputFitnessContext(environment)
+                        FitnessContexts.SingleOutputFitnessContext(environment)
                     }
             )
     )
@@ -178,7 +185,7 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
     }
 
     override fun initialiseModel() {
-        this.model = Models.SteadyState(this.environment)
+        this.model = SteadyState(this.environment)
     }
 
     override fun solve(): SimpleFunctionSolution {
@@ -199,6 +206,14 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
                 SimpleFunctionSolution(this@SimpleFunctionProblem.name, result)
             }
             */
+
+            val traceEvents = mutableListOf<DiagnosticEvent.Trace>()
+
+            EventRegistry.register(object : EventListener<DiagnosticEvent.Trace> {
+                override fun handle(event: DiagnosticEvent.Trace) {
+                    traceEvents += event
+                }
+            })
 
             val runner = DistributedTrainer(environment, model, runs = 2)
 
@@ -226,6 +241,8 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>>() {
 class SimpleFunction {
     companion object Main {
         @JvmStatic fun main(args: Array<String>) {
+            System.setProperty("LGP.LogLevel", "debug")
+
             // Create a new problem instance, initialise it, and then solve it.
             val problem = SimpleFunctionProblem()
             problem.initialiseEnvironment()

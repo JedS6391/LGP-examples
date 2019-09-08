@@ -1,11 +1,13 @@
 package nz.co.jedsimson.lgp.examples.java;
 
+import nz.co.jedsimson.lgp.core.environment.dataset.Targets;
 import nz.co.jedsimson.lgp.core.evolution.Problem;
 import nz.co.jedsimson.lgp.core.program.Outputs;
 import nz.co.jedsimson.lgp.core.evolution.model.EvolutionResult;
 import nz.co.jedsimson.lgp.lib.base.BaseProgram;
 import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,7 +16,7 @@ import java.util.Map;
 public class SimpleFunction {
 
     public static void main(String[] args) {
-        Problem<Double, Outputs.Single<Double>> problem = new SimpleFunctionProblem();
+        Problem<Double, Outputs.Single<Double>, Targets.Single<Double>> problem = new SimpleFunctionProblem();
 
         problem.initialiseEnvironment();
         problem.initialiseModel();
@@ -24,26 +26,24 @@ public class SimpleFunction {
 
         System.out.println("Results:");
         int run = 0;
-        for (EvolutionResult<Double, Outputs.Single<Double>> res : solution.getResult().getEvaluations()) {
+        double sum = 0.0;
+        List<EvolutionResult<Double, Outputs.Single<Double>>> evaluations = solution.getResult().getEvaluations();
 
-            System.out.println("Run " + (run++ + 1) + " (best fitness = " + res.getBest().getFitness() + ")");
-            System.out.println(simplifier.simplify((BaseProgram<Double, Outputs.Single<Double>>) res.getBest()));
+        for (EvolutionResult<Double, Outputs.Single<Double>> evaluation : evaluations) {
+            sum += evaluation.getBest().getFitness();
+
+            System.out.println("Run " + (run++ + 1) + " (best fitness = " + evaluation.getBest().getFitness() + ")");
+            System.out.println(simplifier.simplify((BaseProgram<Double, Outputs.Single<Double>>) evaluation.getBest()));
 
             System.out.println("\nStats (last run only):\n");
 
-            int last = res.getStatistics().size() - 1;
+            int last = evaluation.getStatistics().size() - 1;
 
-            for (Map.Entry<String, Object> datum : res.getStatistics().get(last).getData().entrySet()) {
+            for (Map.Entry<String, Object> datum : evaluation.getStatistics().get(last).getData().entrySet()) {
                 System.out.println(datum.getKey() + " = " + datum.getValue());
             }
 
             System.out.println();
-        }
-
-        double sum = 0.0;
-
-        for (EvolutionResult<Double, Outputs.Single<Double>> res : solution.getResult().getEvaluations()) {
-            sum += res.getBest().getFitness();
         }
 
         double averageBestFitness = sum / ((double) solution.getResult().getEvaluations().size());

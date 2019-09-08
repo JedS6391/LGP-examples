@@ -1,17 +1,28 @@
 package nz.co.jedsimson.lgp.examples.kotlin
 
-import nz.co.jedsimson.lgp.core.environment.*
+import nz.co.jedsimson.lgp.core.environment.DefaultValueProviders
+import nz.co.jedsimson.lgp.core.environment.Environment
 import nz.co.jedsimson.lgp.core.environment.config.Configuration
 import nz.co.jedsimson.lgp.core.environment.config.ConfigurationLoader
 import nz.co.jedsimson.lgp.core.environment.constants.GenericConstantLoader
 import nz.co.jedsimson.lgp.core.environment.dataset.*
 import nz.co.jedsimson.lgp.core.environment.operations.DefaultOperationLoader
-import nz.co.jedsimson.lgp.core.evolution.*
-import nz.co.jedsimson.lgp.core.evolution.fitness.*
-import nz.co.jedsimson.lgp.core.evolution.model.Models
-import nz.co.jedsimson.lgp.core.evolution.operators.*
+import nz.co.jedsimson.lgp.core.evolution.Description
+import nz.co.jedsimson.lgp.core.evolution.Problem
+import nz.co.jedsimson.lgp.core.evolution.ProblemNotInitialisedException
+import nz.co.jedsimson.lgp.core.evolution.Solution
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessContexts
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessFunctions
+import nz.co.jedsimson.lgp.core.evolution.model.MasterSlave
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.macro.MacroMutationOperator
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.ConstantMutationFunctions
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.MicroMutationOperator
+import nz.co.jedsimson.lgp.core.evolution.operators.recombination.linearCrossover.LinearCrossover
+import nz.co.jedsimson.lgp.core.evolution.operators.selection.TournamentSelection
 import nz.co.jedsimson.lgp.core.evolution.training.DistributedTrainer
 import nz.co.jedsimson.lgp.core.evolution.training.TrainingResult
+import nz.co.jedsimson.lgp.core.modules.CoreModuleType
+import nz.co.jedsimson.lgp.core.modules.ModuleContainer
 import nz.co.jedsimson.lgp.core.modules.ModuleInformation
 import nz.co.jedsimson.lgp.core.program.Outputs
 import nz.co.jedsimson.lgp.lib.base.BaseProgram
@@ -22,10 +33,10 @@ import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
 
 data class SinPolySolution(
         override val problem: String,
-        val result: TrainingResult<Double, Outputs.Single<Double>>
+        val result: TrainingResult<Double, Outputs.Single<Double>, Targets.Single<Double>>
 ) : Solution<Double>
 
-class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
+class SinPolyProblem : Problem<Double, Outputs.Single<Double>, Targets.Single<Double>>() {
     override val name = "SinPoly."
 
     override val description = Description("f(x) = sin(x) * x + 5\n\trange = Uniform[-5:5]")
@@ -57,7 +68,6 @@ class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
             config.numFeatures = 1
             config.microMutationRate = 0.25
             config.macroMutationRate = 0.75
-            config.numOffspring = 20
             config.crossoverRate = 0.7
 
             return config
@@ -71,14 +81,14 @@ class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
             parseFunction = String::toDouble
     )
 
-    val datasetLoader = object : DatasetLoader<Double> {
+    val datasetLoader = object : DatasetLoader<Double, Targets.Single<Double>> {
         // f(x) = sin(x) * x + 5
         val func = { x: Double -> Math.sin(x) * x + 5.0 }
         val gen = UniformlyDistributedGenerator()
 
         override val information = ModuleInformation("Generates uniformly distributed samples in the range [-5:5].")
 
-        override fun load(): Dataset<Double> {
+        override fun load(): Dataset<Double, Targets.Single<Double>> {
             val xs = gen.generate(100, -5.0, 5.0).map { v ->
                 Sample(
                     listOf(Feature(name = "x", value = v))
@@ -106,7 +116,7 @@ class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
         FitnessFunctions.SSE
     }
 
-    override val registeredModules = ModuleContainer<Double, Outputs.Single<Double>>(
+    override val registeredModules = ModuleContainer<Double, Outputs.Single<Double>, Targets.Single<Double>>(
             modules = mutableMapOf(
                     CoreModuleType.InstructionGenerator to { environment ->
                         RandomInstructionGenerator(environment)
@@ -120,7 +130,7 @@ class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
                         )
                     },
                     CoreModuleType.SelectionOperator to { environment ->
-                        TournamentSelection(environment, tournamentSize = 10)
+                        TournamentSelection(environment, tournamentSize = 10, numberOfOffspring = 20)
                     },
                     CoreModuleType.RecombinationOperator to { environment ->
                         LinearCrossover(
@@ -148,7 +158,7 @@ class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
                         )
                     },
                     CoreModuleType.FitnessContext to { environment ->
-                        SingleOutputFitnessContext(environment)
+                        FitnessContexts.SingleOutputFitnessContext(environment)
                     }
             )
     )
@@ -166,7 +176,7 @@ class SinPolyProblem : Problem<Double, Outputs.Single<Double>>() {
     }
 
     override fun initialiseModel() {
-        this.model = Models.MasterSlave(this.environment)
+        this.model = MasterSlave(this.environment)
     }
 
     override fun solve(): SinPolySolution {

@@ -12,10 +12,11 @@ repositories {
 dependencies {
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 
-    compile "nz.co.jedsimson.lgp:LGP:4.2"
-    compile "nz.co.jedsimson.lgp:LGP:4.2:sources"
-    compile "nz.co.jedsimson.lgp:LGP-lib:1.1"
-    compile "nz.co.jedsimson.lgp:LGP-lib:1.1:sources"
+    compile "nz.co.jedsimson.lgp:LGP:5.1"
+    compile "nz.co.jedsimson.lgp:LGP:5.1:sources"
+
+    compile "nz.co.jedsimson.lgp:LGP-lib:1.3"
+    compile "nz.co.jedsimson.lgp:LGP-lib:1.3:sources"
 }
 
 compileKotlin {

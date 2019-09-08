@@ -1,17 +1,28 @@
 package nz.co.jedsimson.lgp.examples.kotlin
 
-import nz.co.jedsimson.lgp.core.environment.*
+import nz.co.jedsimson.lgp.core.environment.DefaultValueProviders
+import nz.co.jedsimson.lgp.core.environment.Environment
 import nz.co.jedsimson.lgp.core.environment.config.Configuration
 import nz.co.jedsimson.lgp.core.environment.config.ConfigurationLoader
 import nz.co.jedsimson.lgp.core.environment.constants.GenericConstantLoader
 import nz.co.jedsimson.lgp.core.environment.dataset.*
 import nz.co.jedsimson.lgp.core.environment.operations.DefaultOperationLoader
-import nz.co.jedsimson.lgp.core.evolution.*
-import nz.co.jedsimson.lgp.core.evolution.fitness.*
-import nz.co.jedsimson.lgp.core.evolution.model.Models
-import nz.co.jedsimson.lgp.core.evolution.operators.*
+import nz.co.jedsimson.lgp.core.evolution.Description
+import nz.co.jedsimson.lgp.core.evolution.Problem
+import nz.co.jedsimson.lgp.core.evolution.ProblemNotInitialisedException
+import nz.co.jedsimson.lgp.core.evolution.Solution
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessContexts
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessFunctions
+import nz.co.jedsimson.lgp.core.evolution.model.SteadyState
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.macro.MacroMutationOperator
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.ConstantMutationFunctions
+import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.MicroMutationOperator
+import nz.co.jedsimson.lgp.core.evolution.operators.recombination.linearCrossover.LinearCrossover
+import nz.co.jedsimson.lgp.core.evolution.operators.selection.TournamentSelection
 import nz.co.jedsimson.lgp.core.evolution.training.DistributedTrainer
 import nz.co.jedsimson.lgp.core.evolution.training.TrainingResult
+import nz.co.jedsimson.lgp.core.modules.CoreModuleType
+import nz.co.jedsimson.lgp.core.modules.ModuleContainer
 import nz.co.jedsimson.lgp.core.modules.ModuleInformation
 import nz.co.jedsimson.lgp.core.program.Outputs
 import nz.co.jedsimson.lgp.lib.base.BaseProgram
@@ -19,17 +30,16 @@ import nz.co.jedsimson.lgp.lib.base.BaseProgramOutputResolvers
 import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier
 import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
-
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 
 data class IrisSolution(
         override val problem: String,
-        val result: TrainingResult<Double, Outputs.Single<Double>>
+        val result: TrainingResult<Double, Outputs.Single<Double>, Targets.Single<Double>>
 ) : Solution<Double>
 
-class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Single<Double>>() {
+class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Single<Double>, Targets.Single<Double>>() {
     override val name = "Iris Classification."
 
     override val description = Description(
@@ -67,7 +77,6 @@ class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Sing
             config.macroMutationRate = 0.75
             config.crossoverRate = 0.75
             config.branchInitialisationRate = 0.1
-            config.numOffspring = 10
 
             return config
         }
@@ -119,7 +128,7 @@ class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Sing
         FitnessFunctions.thresholdCE(0.5)
     }
 
-    override val registeredModules = ModuleContainer<Double, Outputs.Single<Double>>(
+    override val registeredModules = ModuleContainer<Double, Outputs.Single<Double>, Targets.Single<Double>>(
             modules = mutableMapOf(
                     CoreModuleType.InstructionGenerator to { environment ->
                         RandomInstructionGenerator(environment)
@@ -133,7 +142,7 @@ class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Sing
                         )
                     },
                     CoreModuleType.SelectionOperator to { environment ->
-                        TournamentSelection(environment, tournamentSize = 4)
+                        TournamentSelection(environment, tournamentSize = 4, numberOfOffspring = 10)
                     },
                     CoreModuleType.RecombinationOperator to { environment ->
                         LinearCrossover(
@@ -161,7 +170,7 @@ class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Sing
                         )
                     },
                     CoreModuleType.FitnessContext to { environment ->
-                        SingleOutputFitnessContext(environment)
+                        FitnessContexts.SingleOutputFitnessContext(environment)
                     }
             )
     )
@@ -179,12 +188,12 @@ class IrisProblem(val datasetStream: InputStream) : Problem<Double, Outputs.Sing
     }
 
     override fun initialiseModel() {
-        this.model = Models.SteadyState(this.environment)
+        this.model = SteadyState(this.environment)
     }
 
     override fun solve(): IrisSolution {
         try {
-            val runner = DistributedTrainer(environment, model, runs = 5)
+            val runner = DistributedTrainer(environment, model, runs = 2)
             val result = runner.train(this.datasetLoader.load())
 
             return IrisSolution(this.name, result)
