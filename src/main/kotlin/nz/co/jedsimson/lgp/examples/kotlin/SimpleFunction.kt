@@ -3,13 +3,14 @@ package nz.co.jedsimson.lgp.examples.kotlin
 import kotlinx.coroutines.runBlocking
 import nz.co.jedsimson.lgp.core.environment.DefaultValueProviders
 import nz.co.jedsimson.lgp.core.environment.Environment
+import nz.co.jedsimson.lgp.core.environment.EnvironmentFacade
 import nz.co.jedsimson.lgp.core.environment.config.Configuration
 import nz.co.jedsimson.lgp.core.environment.config.ConfigurationLoader
 import nz.co.jedsimson.lgp.core.environment.constants.GenericConstantLoader
 import nz.co.jedsimson.lgp.core.environment.dataset.*
+import nz.co.jedsimson.lgp.core.environment.dataset.Target
 import nz.co.jedsimson.lgp.core.environment.operations.DefaultOperationLoader
 import nz.co.jedsimson.lgp.core.evolution.*
-import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessContexts
 import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessFunctions
 import nz.co.jedsimson.lgp.core.evolution.model.SteadyState
 import nz.co.jedsimson.lgp.core.evolution.operators.mutation.macro.MacroMutationOperator
@@ -29,7 +30,10 @@ import nz.co.jedsimson.lgp.lib.base.BaseProgramSimplifier
 import nz.co.jedsimson.lgp.lib.generators.EffectiveProgramGenerator
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
 import nz.co.jedsimson.lgp.core.environment.events.*
-import java.io.File
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessCase
+import nz.co.jedsimson.lgp.core.evolution.fitness.FitnessContext
+import nz.co.jedsimson.lgp.core.program.Output
+import nz.co.jedsimson.lgp.core.program.Program
 
 /*
  * An example of setting up an environment to use LGP to find programs for the function `x^2 + 2x + 2`.
@@ -164,7 +168,7 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>, Targets.Si
                         )
                     },
                     CoreModuleType.FitnessContext to { environment ->
-                        FitnessContexts.SingleOutputFitnessContext(environment)
+                        TracingFitnessContext(environment)
                     }
             )
     )
@@ -215,6 +219,14 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>, Targets.Si
                 }
             })
 
+            val fitnessContextEvaluationEvents = mutableListOf<FitnessContextEvaluationEvent<Double, Outputs.Single<Double>>>()
+
+            EventRegistry.register(object : EventListener<FitnessContextEvaluationEvent<Double, Outputs.Single<Double>>> {
+                override fun handle(event: FitnessContextEvaluationEvent<Double, Outputs.Single<Double>>) {
+                    fitnessContextEvaluationEvents += event
+                }
+            })
+
             val runner = DistributedTrainer(environment, model, runs = 2)
 
             return runBlocking {
@@ -236,6 +248,62 @@ class SimpleFunctionProblem : Problem<Double, Outputs.Single<Double>, Targets.Si
             )
         }
     }
+}
+
+class FitnessContextEvaluationEvent<TData, TOutput : Output<TData>>(
+    val program: Program<TData, TOutput>,
+    val outputs: List<TOutput>
+) : Event() {
+
+}
+
+class TracingFitnessContext<TData, TOutput : Output<TData>, TTarget : Target<TData>>(
+    environment: EnvironmentFacade<TData, TOutput, TTarget>
+) : FitnessContext<TData, TOutput, TTarget>(environment) {
+
+    override val information: ModuleInformation
+        get() = TODO()
+
+    private val fitnessFunction by lazy {
+        this.environment.fitnessFunctionProvider()
+    }
+
+    /**
+     * Evaluates the fitness by performing the following steps:
+     *
+     * 1. Finds the effective program
+     * 2. Writes each fitness case to the programs register set
+     * 3. Executes the program and collects the output from each fitness case
+     * 4. Executes the fitness function from the given environment
+     */
+    override fun fitness(program: Program<TData, TOutput>, fitnessCases: List<FitnessCase<TData, TTarget>>): Double {
+        // Make sure the programs effective instructions have been found
+        program.findEffectiveProgram()
+
+        // Collect the results of the program for each fitness case.
+        val outputs = fitnessCases.map { case ->
+            // Make sure the registers are in a default state
+            program.registers.reset()
+
+            // Load the case
+            program.registers.writeInstance(case.features)
+
+            // Run the program...
+            program.execute()
+
+            // ... and gather a result from the program.
+            program.output()
+        }
+
+        // Create an event with the program and its outputs
+        EventDispatcher.dispatch(FitnessContextEvaluationEvent(program, outputs))
+
+        // Copy the fitness to the program for later accesses
+        program.fitness = fitnessFunction(outputs, fitnessCases)
+
+        return program.fitness
+    }
+
 }
 
 class SimpleFunction {
