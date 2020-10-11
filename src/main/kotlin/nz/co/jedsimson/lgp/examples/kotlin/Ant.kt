@@ -1,5 +1,7 @@
 package nz.co.jedsimson.lgp.examples.kotlin
 
+import java.lang.StringBuilder
+
 /**
  * Simulates the ant as it moves through the grid.
  *
@@ -18,6 +20,12 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
             column =  this.state.column,
             direction = this.state.direction
         )
+
+    /**
+     * Gets the grid the ant moves its way through.
+     */
+    val grid: Grid
+        get() = this.state.grid
 
     init {
         this.state = State(
@@ -96,6 +104,8 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
 
             if (this.state.grid.containsFood(this.state.row, this.state.column)) {
                 this.state.grid.eatFood(this.state.row, this.state.column)
+
+                this.state = this.state.copy(foodEaten = this.state.foodEaten + 1)
             }
         }
     }
@@ -109,13 +119,20 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
         return this.state.grid.containsFood(nextPosition.row, nextPosition.column)
     }
 
+    fun copy(): Ant = Ant(
+        grid = this.state.grid.clone(),
+        maximumMoves = this.maximumMoves
+    )
+
+    override fun toString(): String =
+        "Ant(movesMade = ${this.state.movesMade}, foodEaten = ${this.state.foodEaten}, foodRemaining = ${this.state.grid.foodRemaining()}, position = ${this.position})"
+
     private fun nextPosition(): Position {
         val rowOffset = when (this.state.direction) {
-            Direction.North -> 1
-            Direction.South -> -1
+            Direction.North -> -1
+            Direction.South -> 1
             Direction.West, Direction.East -> 0
         }
-
         val columnOffset = when (this.state.direction) {
             Direction.East -> 1
             Direction.West -> -1
@@ -123,8 +140,8 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
         }
 
         return Position(
-            row = (this.state.row + rowOffset).rem(this.state.grid.numberOfRows),
-            column = (this.state.column + columnOffset).rem(this.state.grid.numberOfColumns),
+            row = Math.floorMod(this.state.row + rowOffset, this.state.grid.numberOfRows),
+            column = Math.floorMod(this.state.column + columnOffset, this.state.grid.numberOfColumns),
             direction = this.state.direction
         )
     }
@@ -158,7 +175,7 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
  * @property initialGridData A 2-D array of cells that contains the initial grid data before any ant movements.
  */
 class Grid(private val initialGridData: Array<Array<Cell>>) {
-    private var grid: Array<Array<Cell>> = initialGridData.clone()
+    private var grid: Array<Array<Cell>> = initialGridData.map { row -> row.clone() }.toTypedArray()
 
     init {
         val numberOfColumns = initialGridData[0].size
@@ -176,6 +193,13 @@ class Grid(private val initialGridData: Array<Array<Cell>>) {
      * Gets the number of columns in the grid.
      */
     val numberOfColumns: Int = grid[0].size
+
+    /**
+     * Gets the amount of food remaining in the grid.
+     */
+    fun foodRemaining(): Int = grid.sumBy { row ->
+        row.filter { cell -> cell == Cell.Food }.count()
+    }
 
     /**
      * Checks if the cell at the given co-ordinates contains food.
@@ -196,14 +220,31 @@ class Grid(private val initialGridData: Array<Array<Cell>>) {
      * Resets the grid back to the [initialGridData].
      */
     fun reset() {
-        this.grid = this.initialGridData.clone()
+        this.grid = this.initialGridData.map { row -> row.clone() }.toTypedArray()
     }
 
     /**
      * Creates a new grid instance seeded with [initialGridData].
      */
     fun clone(): Grid {
-        return Grid(this.initialGridData.clone())
+        return Grid(this.initialGridData.map { row -> row.clone() }.toTypedArray())
+    }
+
+    override fun toString(): String {
+        val sb = StringBuilder()
+
+        this.grid.forEach { row ->
+            row.forEach { cell ->
+                sb.append(when (cell) {
+                    Cell.Empty -> '.'
+                    Cell.Food  -> '#'
+                })
+            }
+
+            sb.append(System.lineSeparator())
+        }
+
+        return sb.toString()
     }
 
     /**
