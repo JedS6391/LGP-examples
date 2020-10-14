@@ -95,24 +95,28 @@ class AntTrailProgram(
     override fun execute() {
         var skipNextInstruction = false
 
-        for (instruction in this.instructions) {
-            if (skipNextInstruction ) {
-                // A branch was not taken so skip the current instruction
-                continue
-            }
-
-            val operation = instruction.operation
-
-            // Determine how to manipulate the ant.
-            when (operation.javaClass) {
-                IfFoodAhead::class.java -> {
-                    // The next instruction should be skipped when there is no food ahead,
-                    // resulting in an if-else like structure.
-                    skipNextInstruction = !this.ant.isFoodAhead()
+        //run until max moves or ideal fitness
+        while (this.ant.grid.foodRemaining() != 0 && this.ant.state.movesMade < this.ant.maximumMoves) {
+            for (instruction in this.instructions) {
+                if (skipNextInstruction) {
+                    skipNextInstruction = false
+                    // A branch was not taken so skip the current instruction
+                    continue
                 }
-                MoveForward::class.java -> this.ant.moveForward()
-                TurnLeft::class.java -> this.ant.turnLeft()
-                TurnRight::class.java -> this.ant.turnRight()
+
+                val operation = instruction.operation
+
+                // Determine how to manipulate the ant.
+                when (operation.javaClass) {
+                    IfFoodAhead::class.java -> {
+                        // The next instruction should be skipped when there is no food ahead,
+                        // resulting in an if-else like structure.
+                        skipNextInstruction = !this.ant.isFoodAhead()
+                    }
+                    MoveForward::class.java -> this.ant.moveForward()
+                    TurnLeft::class.java -> this.ant.turnLeft()
+                    TurnRight::class.java -> this.ant.turnRight()
+                }
             }
         }
     }
@@ -391,7 +395,7 @@ class AntTrail {
             ))
 
             val problem = AntTrailProblem(
-                maximumMoves = 15,
+                maximumMoves = 60,
                 gridProvider = gridProvider
             )
 
