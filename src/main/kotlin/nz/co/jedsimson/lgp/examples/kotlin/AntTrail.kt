@@ -34,6 +34,10 @@ import nz.co.jedsimson.lgp.core.program.instructions.Operation
 import nz.co.jedsimson.lgp.core.program.registers.RegisterIndex
 import nz.co.jedsimson.lgp.core.program.registers.RegisterSet
 import nz.co.jedsimson.lgp.lib.generators.RandomInstructionGenerator
+import java.io.BufferedReader
+import java.io.InputStream
+import java.io.InputStreamReader
+import kotlin.streams.toList
 
 enum class AntTrailProblemArity(override val number: Int) : Arity {
     None(0)
@@ -124,9 +128,31 @@ class AntTrailProgram(
     override fun output(): Outputs.Single<Unit> = Outputs.Single(Unit)
 }
 
-class GridProvider(private val gridData: Array<Array<Grid.Cell>>) {
+class GridProvider private constructor(private val gridData: Array<Array<Grid.Cell>>) {
     fun newGrid(): Grid {
         return Grid(this.gridData.clone())
+    }
+
+    companion object Builder {
+        fun from(gridData: Array<Array<Grid.Cell>>): GridProvider {
+            return GridProvider(gridData)
+        }
+
+        fun from(inputStream: InputStream): GridProvider {
+            val bufferedReader = BufferedReader(InputStreamReader(inputStream))
+
+            val gridData = bufferedReader.lines().map { line ->
+                line.map { c ->
+                    when (c) {
+                        '.' -> Grid.Cell.Empty
+                        '#' -> Grid.Cell.Food
+                        else -> throw Exception("Unexpected grid data character: $c")
+                    }
+                }.toTypedArray()
+            }.toList()
+
+            return GridProvider(gridData.toTypedArray())
+        }
     }
 }
 
@@ -381,14 +407,9 @@ class AntTrailProblem(
 class AntTrail {
     companion object Main {
         @JvmStatic fun main(args: Array<String>) {
-            val gridProvider = GridProvider(arrayOf(
-                arrayOf(Grid.Cell.Empty, Grid.Cell.Empty, Grid.Cell.Empty, Grid.Cell.Empty),
-                arrayOf(Grid.Cell.Food, Grid.Cell.Empty, Grid.Cell.Empty, Grid.Cell.Empty),
-                arrayOf(Grid.Cell.Food, Grid.Cell.Food, Grid.Cell.Food, Grid.Cell.Empty),
-                arrayOf(Grid.Cell.Empty, Grid.Cell.Empty, Grid.Cell.Food, Grid.Cell.Empty),
-                arrayOf(Grid.Cell.Empty, Grid.Cell.Empty, Grid.Cell.Food, Grid.Cell.Empty),
-                arrayOf(Grid.Cell.Empty, Grid.Cell.Empty, Grid.Cell.Food, Grid.Cell.Food)
-            ))
+            val gridProvider = GridProvider.from(
+                this::class.java.classLoader.getResourceAsStream("datasets/ant-trail.txt")
+            )
 
             val problem = AntTrailProblem(
                 maximumMoves = 15,
