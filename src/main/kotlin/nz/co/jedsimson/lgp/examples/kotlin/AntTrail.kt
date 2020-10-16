@@ -219,15 +219,34 @@ class GridProvider private constructor(private val gridData: Array<Array<Grid.Ce
         fun from(inputStream: InputStream): GridProvider {
             val bufferedReader = BufferedReader(InputStreamReader(inputStream))
 
-            val gridData = bufferedReader.lines().map { line ->
-                line.map { c ->
+            val header = bufferedReader.readLine()//header containing grid dimensions
+            val rows = header.split(" ")[0].toString().trim().toInt()
+            val columns = header.split(" ")[1].toString().trim().toInt()
+
+            val gridDataRead = bufferedReader.lines().map { line ->
+                var cells=line.map { c ->
                     when (c) {
                         '.' -> Grid.Cell.Empty
+                        ' ' -> Grid.Cell.Empty
                         '#' -> Grid.Cell.Food
                         else -> throw Exception("Unexpected grid data character: $c")
                     }
-                }.toTypedArray()
+                }.toMutableList()
+                for(x in cells.size until columns){
+                    cells.add(Grid.Cell.Empty)
+                }
+                cells.toTypedArray()
             }.toList()
+
+            val gridData = gridDataRead.toMutableList()
+
+            for(y in gridData.size until rows){
+                var cells= mutableListOf<Grid.Cell>()
+                for(x in 0 until columns){
+                    cells.add(Grid.Cell.Empty)
+                }
+                gridData.add(cells.toTypedArray())
+            }
 
             return GridProvider(gridData.toTypedArray())
         }
@@ -486,11 +505,11 @@ class AntTrail {
     companion object Main {
         @JvmStatic fun main(args: Array<String>) {
             val gridProvider = GridProvider.from(
-                this::class.java.classLoader.getResourceAsStream("datasets/ant-trail.txt")
+                this::class.java.classLoader.getResourceAsStream("datasets/santafe.trl")
             )
 
             val problem = AntTrailProblem(
-                maximumMoves = 60,
+                maximumMoves = 400,
                 gridProvider = gridProvider
             )
 
