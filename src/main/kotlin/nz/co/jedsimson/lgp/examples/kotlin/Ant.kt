@@ -33,7 +33,7 @@ class Ant(grid: Grid, val maximumMoves: Int) {
             foodEaten = 0,
             row = 0,
             column = 0,
-            direction = Direction.North,
+            direction = Direction.East,
             grid = grid
         )
     }
@@ -48,7 +48,7 @@ class Ant(grid: Grid, val maximumMoves: Int) {
             foodEaten = 0,
             row = 0,
             column = 0,
-            direction = Direction.North,
+            direction = Direction.East,
             grid = this.state.grid
         )
     }
