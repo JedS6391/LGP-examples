@@ -8,8 +8,8 @@ import java.lang.StringBuilder
  * @param grid A grid that ant will move its way through.
  * @property maximumMoves A limit on the number of moves permitted by the ant.
  */
-class Ant(grid: Grid, private val maximumMoves: Int) {
-    private var state: State
+class Ant(grid: Grid, val maximumMoves: Int) {
+    var state: AntState
 
     /**
      * Gets details about the current position of the ant.
@@ -28,12 +28,12 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
         get() = this.state.grid
 
     init {
-        this.state = State(
+        this.state = AntState(
             movesMade = 0,
             foodEaten = 0,
             row = 0,
             column = 0,
-            direction = Direction.North,
+            direction = Direction.East,
             grid = grid
         )
     }
@@ -43,12 +43,12 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
      */
     fun reset() {
         this.state.grid.reset()
-        this.state = State(
+        this.state = AntState(
             movesMade = 0,
             foodEaten = 0,
             row = 0,
             column = 0,
-            direction = Direction.North,
+            direction = Direction.East,
             grid = this.state.grid
         )
     }
@@ -159,7 +159,7 @@ class Ant(grid: Grid, private val maximumMoves: Int) {
         West
     }
 
-    private data class State(
+    data class AntState(
         val movesMade: Int,
         val foodEaten: Int,
         val row: Int,

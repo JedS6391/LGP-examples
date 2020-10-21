@@ -97,28 +97,106 @@ class AntTrailProgram(
     )
 
     override fun execute() {
-        var skipNextInstruction = false
+        //var skipNextInstruction = false
+        var lastMovesMade = -1
 
-        for (instruction in this.instructions) {
-            if (skipNextInstruction ) {
-                // A branch was not taken so skip the current instruction
-                continue
-            }
-
-            val operation = instruction.operation
-
-            // Determine how to manipulate the ant.
-            when (operation.javaClass) {
-                IfFoodAhead::class.java -> {
-                    // The next instruction should be skipped when there is no food ahead,
-                    // resulting in an if-else like structure.
-                    skipNextInstruction = !this.ant.isFoodAhead()
+        //run until max moves or ideal fitness
+        while (this.ant.grid.foodRemaining() != 0 && this.ant.state.movesMade < this.ant.maximumMoves && this.ant.state.movesMade > lastMovesMade) {
+            lastMovesMade=this.ant.state.movesMade
+            var instructionIterator=0
+            var instructionsToSkip= mutableListOf<Int>()
+            for (instruction in this.instructions) {
+                if (instructionIterator in instructionsToSkip) {
+                    // A branch was not taken so skip the current instruction
+                    instructionIterator++
+                    continue
                 }
-                MoveForward::class.java -> this.ant.moveForward()
-                TurnLeft::class.java -> this.ant.turnLeft()
-                TurnRight::class.java -> this.ant.turnRight()
+
+                val operation = instruction.operation
+
+                // Determine how to manipulate the ant.
+                when (operation.javaClass) {
+                    IfFoodAhead::class.java -> {
+                        // look ahead which nodes in the branch need to be skipped
+                        val tree=buildTreeStructure(instructions,instructionIterator)
+                        if (this.ant.isFoodAhead()) {
+                            val toSkip=listAllChildren(tree.children[1])
+                            instructionsToSkip.addAll(toSkip)
+                        }else{
+                            val toSkip=listAllChildren(tree.children[0])
+                            instructionsToSkip.addAll(toSkip)
+                        }
+                    }
+                    MoveForward::class.java -> this.ant.moveForward()
+                    TurnLeft::class.java -> this.ant.turnLeft()
+                    TurnRight::class.java -> this.ant.turnRight()
+                }
+                instructionIterator++
             }
         }
+    }
+
+    class TreeNode<T>(value:T){
+        var value:T = value
+        var parent:TreeNode<T>? = null
+
+        var children:MutableList<TreeNode<T>> = mutableListOf()
+
+        fun addChild(node:TreeNode<T>){
+            children.add(node)
+            node.parent = this
+        }
+        override fun toString(): String {
+            var s = "${value}"
+            if (!children.isEmpty()) {
+                s += " {" + children.map { it.toString() } + " }"
+            }
+            return s
+        }
+    }
+
+
+    private fun buildTreeStructure(instructions:List<Instruction<Unit>>,instructionIterator:Int): TreeNode<Int> {
+        var rootNode=TreeNode<Int>(instructionIterator)
+        evalNode(instructions,rootNode)
+        return rootNode
+    }
+
+    private fun evalNode(instructions:List<Instruction<Unit>>,node:TreeNode<Int>): TreeNode<Int>{
+        //val children = mutableListOf<IntArray>()
+        if(node.value < instructions.size) {
+            val operation = instructions[node.value].operation
+            if (operation.javaClass == IfFoodAhead::class.java) {
+                var childNode1 = TreeNode<Int>(node.value + 1)
+                childNode1 = evalNode(instructions, childNode1)
+                node.addChild(childNode1)
+                //next node is last terminal node of first branch +1
+                var childNode2 = TreeNode<Int>(lastChild(childNode1).value + 1)
+                childNode2 = evalNode(instructions, childNode2)
+                node.addChild(childNode2)
+            }
+        }
+        return node
+    }
+
+    private fun lastChild(node:TreeNode<Int>):TreeNode<Int>{
+        if(node.children.size>0){
+            return lastChild(node.children.last())
+        }else{
+            return node
+        }
+    }
+
+    private fun listAllChildren(node:TreeNode<Int>):List<Int>{
+        var children = mutableListOf<Int>()
+        children.add(node.value)
+
+        if(node.children.size>0){
+            for (child in node.children){
+                children.addAll(listAllChildren(child))
+            }
+        }
+        return children
     }
 
     override fun findEffectiveProgram() {
@@ -141,15 +219,34 @@ class GridProvider private constructor(private val gridData: Array<Array<Grid.Ce
         fun from(inputStream: InputStream): GridProvider {
             val bufferedReader = BufferedReader(InputStreamReader(inputStream))
 
-            val gridData = bufferedReader.lines().map { line ->
-                line.map { c ->
+            val header = bufferedReader.readLine()//header containing grid dimensions
+            val rows = header.split(" ")[0].toString().trim().toInt()
+            val columns = header.split(" ")[1].toString().trim().toInt()
+
+            val gridDataRead = bufferedReader.lines().map { line ->
+                var cells=line.map { c ->
                     when (c) {
                         '.' -> Grid.Cell.Empty
+                        ' ' -> Grid.Cell.Empty
                         '#' -> Grid.Cell.Food
                         else -> throw Exception("Unexpected grid data character: $c")
                     }
-                }.toTypedArray()
+                }.toMutableList()
+                for(x in cells.size until columns){
+                    cells.add(Grid.Cell.Empty)
+                }
+                cells.toTypedArray()
             }.toList()
+
+            val gridData = gridDataRead.toMutableList()
+
+            for(y in gridData.size until rows){
+                var cells= mutableListOf<Grid.Cell>()
+                for(x in 0 until columns){
+                    cells.add(Grid.Cell.Empty)
+                }
+                gridData.add(cells.toTypedArray())
+            }
 
             return GridProvider(gridData.toTypedArray())
         }
@@ -408,11 +505,11 @@ class AntTrail {
     companion object Main {
         @JvmStatic fun main(args: Array<String>) {
             val gridProvider = GridProvider.from(
-                this::class.java.classLoader.getResourceAsStream("datasets/ant-trail.txt")
+                this::class.java.classLoader.getResourceAsStream("datasets/santafe.trl")
             )
 
             val problem = AntTrailProblem(
-                maximumMoves = 15,
+                maximumMoves = 400,
                 gridProvider = gridProvider
             )
 
