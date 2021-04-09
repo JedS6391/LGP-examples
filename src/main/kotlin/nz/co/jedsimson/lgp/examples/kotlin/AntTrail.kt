@@ -19,6 +19,7 @@ import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.ConstantMutat
 import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.MicroMutationOperator
 import nz.co.jedsimson.lgp.core.evolution.operators.recombination.linearCrossover.LinearCrossover
 import nz.co.jedsimson.lgp.core.evolution.operators.selection.BinaryTournamentSelection
+import nz.co.jedsimson.lgp.core.evolution.operators.selection.TournamentSelection
 import nz.co.jedsimson.lgp.core.evolution.training.SequentialTrainer
 import nz.co.jedsimson.lgp.core.evolution.training.TrainingResult
 import nz.co.jedsimson.lgp.core.modules.CoreModuleType
@@ -97,7 +98,8 @@ class AntTrailProgram(
     )
 
     override fun execute() {
-        //var skipNextInstruction = false
+        var linearBranching=false
+        var skipNextInstruction = false
         var lastMovesMade = -1
 
         //run until max moves or ideal fitness
@@ -106,11 +108,19 @@ class AntTrailProgram(
             var instructionIterator=0
             var instructionsToSkip= mutableListOf<Int>()
             for (instruction in this.instructions) {
-                if (instructionIterator in instructionsToSkip) {
-                    // A branch was not taken so skip the current instruction
-                    instructionIterator++
-                    continue
+                if (linearBranching){
+                    if (skipNextInstruction) {
+                        skipNextInstruction = false
+                        continue
+                    }
+                }else{
+                    if (instructionIterator in instructionsToSkip) {
+                        // A branch was not taken so skip the current instruction
+                        instructionIterator++
+                        continue
+                    }
                 }
+
 
                 val operation = instruction.operation
 
@@ -118,13 +128,21 @@ class AntTrailProgram(
                 when (operation.javaClass) {
                     IfFoodAhead::class.java -> {
                         // look ahead which nodes in the branch need to be skipped
-                        val tree=buildTreeStructure(instructions,instructionIterator)
-                        if (this.ant.isFoodAhead()) {
-                            val toSkip=listAllChildren(tree.children[1])
-                            instructionsToSkip.addAll(toSkip)
-                        }else{
-                            val toSkip=listAllChildren(tree.children[0])
-                            instructionsToSkip.addAll(toSkip)
+
+                        if(linearBranching){
+                            if (!this.ant.isFoodAhead()) {
+                                skipNextInstruction=true
+                            }
+                        }
+                        else{
+                            val tree=buildTreeStructure(instructions,instructionIterator)
+                            if (this.ant.isFoodAhead()) {
+                                val toSkip=listAllChildren(tree.children[1])
+                                instructionsToSkip.addAll(toSkip)
+                            }else{
+                                val toSkip=listAllChildren(tree.children[0])
+                                instructionsToSkip.addAll(toSkip)
+                            }
                         }
                     }
                     MoveForward::class.java -> this.ant.moveForward()
@@ -312,23 +330,23 @@ class AntTrailFitnessContext(
 
         ant.reset()
 
-        EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
+        /*EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
             key = "ant-fitness-evaluation-start",
             details = mapOf(
                 "position" to ant.position,
                 "ant" to ant.toString()
             )
-        ))
+        ))*/
 
         program.execute()
 
-        EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
+        /*EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
             key = "ant-fitness-evaluation-end",
             details = mapOf(
                 "position" to ant.position,
                 "ant" to ant.toString()
             )
-        ))
+        ))*/
 
         // Ant performance is measured in terms of how much food is remaining
         program.fitness = ant.grid.foodRemaining().toDouble()
@@ -365,10 +383,10 @@ class AntTrailProblem(
         override fun load(): Configuration {
             val config = Configuration()
 
-            config.initialMinimumProgramLength = 5
-            config.initialMaximumProgramLength = 20
-            config.minimumProgramLength = 5
-            config.maximumProgramLength = 40
+            config.initialMinimumProgramLength = 3
+            config.initialMaximumProgramLength = 40
+            config.minimumProgramLength = 3
+            config.maximumProgramLength = 60
             config.operations = listOf(
                 "nz.co.jedsimson.lgp.examples.kotlin.IfFoodAhead",
                 "nz.co.jedsimson.lgp.examples.kotlin.MoveForward",
@@ -381,10 +399,10 @@ class AntTrailProblem(
             config.numCalculationRegisters = 1
             config.constantsRate = 0.0
             config.constants = listOf()
-            config.populationSize = 10
-            config.generations = 50
-            config.microMutationRate = 0.5
-            config.macroMutationRate = 0.5
+            config.populationSize = 600
+            config.generations = 400000
+            config.microMutationRate = 0.8
+            config.macroMutationRate = 0.2
 
             return config
         }
@@ -429,21 +447,22 @@ class AntTrailProblem(
                 )
             },
             CoreModuleType.SelectionOperator to { environment ->
-                BinaryTournamentSelection(environment, tournamentSize = 2)
+                //BinaryTournamentSelection(environment, tournamentSize = 2)
+                TournamentSelection(environment, tournamentSize = 8, numberOfOffspring = 5)
             },
             CoreModuleType.RecombinationOperator to { environment ->
                 LinearCrossover(
                     environment,
-                    maximumSegmentLength = 6,
-                    maximumCrossoverDistance = 5,
-                    maximumSegmentLengthDifference = 3
+                    maximumSegmentLength = 15,
+                    maximumCrossoverDistance = 6,
+                    maximumSegmentLengthDifference = 6
                 )
             },
             CoreModuleType.MacroMutationOperator to { environment ->
                 MacroMutationOperator(
                     environment,
-                    insertionRate = 0.67,
-                    deletionRate = 0.33
+                    insertionRate = 0.6,
+                    deletionRate = 0.4
                 )
             },
             CoreModuleType.MicroMutationOperator to { environment ->
@@ -479,7 +498,7 @@ class AntTrailProblem(
 
     override fun solve(): AntTrailSolution {
         try {
-            val runner = SequentialTrainer(environment, model, runs = 2)
+            val runner = SequentialTrainer(environment, model, runs = 10)
 
             return runBlocking {
                 val job = runner.trainAsync(
