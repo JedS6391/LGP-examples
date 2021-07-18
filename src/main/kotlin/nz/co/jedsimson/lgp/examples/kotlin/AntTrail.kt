@@ -19,6 +19,7 @@ import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.ConstantMutat
 import nz.co.jedsimson.lgp.core.evolution.operators.mutation.micro.MicroMutationOperator
 import nz.co.jedsimson.lgp.core.evolution.operators.recombination.linearCrossover.LinearCrossover
 import nz.co.jedsimson.lgp.core.evolution.operators.selection.BinaryTournamentSelection
+import nz.co.jedsimson.lgp.core.evolution.operators.selection.TournamentSelection
 import nz.co.jedsimson.lgp.core.evolution.training.SequentialTrainer
 import nz.co.jedsimson.lgp.core.evolution.training.TrainingResult
 import nz.co.jedsimson.lgp.core.modules.CoreModuleType
@@ -97,28 +98,123 @@ class AntTrailProgram(
     )
 
     override fun execute() {
+        var linearBranching=false
         var skipNextInstruction = false
+        var lastMovesMade = -1
 
-        for (instruction in this.instructions) {
-            if (skipNextInstruction ) {
-                // A branch was not taken so skip the current instruction
-                continue
-            }
-
-            val operation = instruction.operation
-
-            // Determine how to manipulate the ant.
-            when (operation.javaClass) {
-                IfFoodAhead::class.java -> {
-                    // The next instruction should be skipped when there is no food ahead,
-                    // resulting in an if-else like structure.
-                    skipNextInstruction = !this.ant.isFoodAhead()
+        //run until max moves or ideal fitness
+        while (this.ant.grid.foodRemaining() != 0 && this.ant.state.movesMade < this.ant.maximumMoves && this.ant.state.movesMade > lastMovesMade) {
+            lastMovesMade=this.ant.state.movesMade
+            var instructionIterator=0
+            var instructionsToSkip= mutableListOf<Int>()
+            for (instruction in this.instructions) {
+                if (linearBranching){
+                    if (skipNextInstruction) {
+                        skipNextInstruction = false
+                        continue
+                    }
+                }else{
+                    if (instructionIterator in instructionsToSkip) {
+                        // A branch was not taken so skip the current instruction
+                        instructionIterator++
+                        continue
+                    }
                 }
-                MoveForward::class.java -> this.ant.moveForward()
-                TurnLeft::class.java -> this.ant.turnLeft()
-                TurnRight::class.java -> this.ant.turnRight()
+
+
+                val operation = instruction.operation
+
+                // Determine how to manipulate the ant.
+                when (operation.javaClass) {
+                    IfFoodAhead::class.java -> {
+                        // look ahead which nodes in the branch need to be skipped
+
+                        if(linearBranching){
+                            if (!this.ant.isFoodAhead()) {
+                                skipNextInstruction=true
+                            }
+                        }
+                        else{
+                            val tree=buildTreeStructure(instructions,instructionIterator)
+                            if (this.ant.isFoodAhead()) {
+                                val toSkip=listAllChildren(tree.children[1])
+                                instructionsToSkip.addAll(toSkip)
+                            }else{
+                                val toSkip=listAllChildren(tree.children[0])
+                                instructionsToSkip.addAll(toSkip)
+                            }
+                        }
+                    }
+                    MoveForward::class.java -> this.ant.moveForward()
+                    TurnLeft::class.java -> this.ant.turnLeft()
+                    TurnRight::class.java -> this.ant.turnRight()
+                }
+                instructionIterator++
             }
         }
+    }
+
+    class TreeNode<T>(value:T){
+        var value:T = value
+        var parent:TreeNode<T>? = null
+
+        var children:MutableList<TreeNode<T>> = mutableListOf()
+
+        fun addChild(node:TreeNode<T>){
+            children.add(node)
+            node.parent = this
+        }
+        override fun toString(): String {
+            var s = "${value}"
+            if (!children.isEmpty()) {
+                s += " {" + children.map { it.toString() } + " }"
+            }
+            return s
+        }
+    }
+
+
+    private fun buildTreeStructure(instructions:List<Instruction<Unit>>,instructionIterator:Int): TreeNode<Int> {
+        var rootNode=TreeNode<Int>(instructionIterator)
+        evalNode(instructions,rootNode)
+        return rootNode
+    }
+
+    private fun evalNode(instructions:List<Instruction<Unit>>,node:TreeNode<Int>): TreeNode<Int>{
+        //val children = mutableListOf<IntArray>()
+        if(node.value < instructions.size) {
+            val operation = instructions[node.value].operation
+            if (operation.javaClass == IfFoodAhead::class.java) {
+                var childNode1 = TreeNode<Int>(node.value + 1)
+                childNode1 = evalNode(instructions, childNode1)
+                node.addChild(childNode1)
+                //next node is last terminal node of first branch +1
+                var childNode2 = TreeNode<Int>(lastChild(childNode1).value + 1)
+                childNode2 = evalNode(instructions, childNode2)
+                node.addChild(childNode2)
+            }
+        }
+        return node
+    }
+
+    private fun lastChild(node:TreeNode<Int>):TreeNode<Int>{
+        if(node.children.size>0){
+            return lastChild(node.children.last())
+        }else{
+            return node
+        }
+    }
+
+    private fun listAllChildren(node:TreeNode<Int>):List<Int>{
+        var children = mutableListOf<Int>()
+        children.add(node.value)
+
+        if(node.children.size>0){
+            for (child in node.children){
+                children.addAll(listAllChildren(child))
+            }
+        }
+        return children
     }
 
     override fun findEffectiveProgram() {
@@ -141,15 +237,34 @@ class GridProvider private constructor(private val gridData: Array<Array<Grid.Ce
         fun from(inputStream: InputStream): GridProvider {
             val bufferedReader = BufferedReader(InputStreamReader(inputStream))
 
-            val gridData = bufferedReader.lines().map { line ->
-                line.map { c ->
+            val header = bufferedReader.readLine()//header containing grid dimensions
+            val rows = header.split(" ")[0].toString().trim().toInt()
+            val columns = header.split(" ")[1].toString().trim().toInt()
+
+            val gridDataRead = bufferedReader.lines().map { line ->
+                var cells=line.map { c ->
                     when (c) {
                         '.' -> Grid.Cell.Empty
+                        ' ' -> Grid.Cell.Empty
                         '#' -> Grid.Cell.Food
                         else -> throw Exception("Unexpected grid data character: $c")
                     }
-                }.toTypedArray()
+                }.toMutableList()
+                for(x in cells.size until columns){
+                    cells.add(Grid.Cell.Empty)
+                }
+                cells.toTypedArray()
             }.toList()
+
+            val gridData = gridDataRead.toMutableList()
+
+            for(y in gridData.size until rows){
+                var cells= mutableListOf<Grid.Cell>()
+                for(x in 0 until columns){
+                    cells.add(Grid.Cell.Empty)
+                }
+                gridData.add(cells.toTypedArray())
+            }
 
             return GridProvider(gridData.toTypedArray())
         }
@@ -215,23 +330,23 @@ class AntTrailFitnessContext(
 
         ant.reset()
 
-        EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
+        /*EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
             key = "ant-fitness-evaluation-start",
             details = mapOf(
                 "position" to ant.position,
                 "ant" to ant.toString()
             )
-        ))
+        ))*/
 
         program.execute()
 
-        EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
+        /*EventDispatcher.dispatch(AntTrailFitnessEvaluationEvent(
             key = "ant-fitness-evaluation-end",
             details = mapOf(
                 "position" to ant.position,
                 "ant" to ant.toString()
             )
-        ))
+        ))*/
 
         // Ant performance is measured in terms of how much food is remaining
         program.fitness = ant.grid.foodRemaining().toDouble()
@@ -268,10 +383,10 @@ class AntTrailProblem(
         override fun load(): Configuration {
             val config = Configuration()
 
-            config.initialMinimumProgramLength = 5
-            config.initialMaximumProgramLength = 20
-            config.minimumProgramLength = 5
-            config.maximumProgramLength = 40
+            config.initialMinimumProgramLength = 3
+            config.initialMaximumProgramLength = 40
+            config.minimumProgramLength = 3
+            config.maximumProgramLength = 60
             config.operations = listOf(
                 "nz.co.jedsimson.lgp.examples.kotlin.IfFoodAhead",
                 "nz.co.jedsimson.lgp.examples.kotlin.MoveForward",
@@ -284,10 +399,10 @@ class AntTrailProblem(
             config.numCalculationRegisters = 1
             config.constantsRate = 0.0
             config.constants = listOf()
-            config.populationSize = 10
-            config.generations = 50
-            config.microMutationRate = 0.5
-            config.macroMutationRate = 0.5
+            config.populationSize = 600
+            config.generations = 400000
+            config.microMutationRate = 0.8
+            config.macroMutationRate = 0.2
 
             return config
         }
@@ -332,21 +447,22 @@ class AntTrailProblem(
                 )
             },
             CoreModuleType.SelectionOperator to { environment ->
-                BinaryTournamentSelection(environment, tournamentSize = 2)
+                //BinaryTournamentSelection(environment, tournamentSize = 2)
+                TournamentSelection(environment, tournamentSize = 8, numberOfOffspring = 5)
             },
             CoreModuleType.RecombinationOperator to { environment ->
                 LinearCrossover(
                     environment,
-                    maximumSegmentLength = 6,
-                    maximumCrossoverDistance = 5,
-                    maximumSegmentLengthDifference = 3
+                    maximumSegmentLength = 15,
+                    maximumCrossoverDistance = 6,
+                    maximumSegmentLengthDifference = 6
                 )
             },
             CoreModuleType.MacroMutationOperator to { environment ->
                 MacroMutationOperator(
                     environment,
-                    insertionRate = 0.67,
-                    deletionRate = 0.33
+                    insertionRate = 0.6,
+                    deletionRate = 0.4
                 )
             },
             CoreModuleType.MicroMutationOperator to { environment ->
@@ -382,7 +498,7 @@ class AntTrailProblem(
 
     override fun solve(): AntTrailSolution {
         try {
-            val runner = SequentialTrainer(environment, model, runs = 2)
+            val runner = SequentialTrainer(environment, model, runs = 10)
 
             return runBlocking {
                 val job = runner.trainAsync(
@@ -408,11 +524,11 @@ class AntTrail {
     companion object Main {
         @JvmStatic fun main(args: Array<String>) {
             val gridProvider = GridProvider.from(
-                this::class.java.classLoader.getResourceAsStream("datasets/ant-trail.txt")
+                this::class.java.classLoader.getResourceAsStream("datasets/santafe.trl")
             )
 
             val problem = AntTrailProblem(
-                maximumMoves = 15,
+                maximumMoves = 400,
                 gridProvider = gridProvider
             )
 
