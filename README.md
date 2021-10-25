@@ -1,6 +1,7 @@
 # LGP Examples
 
 [![license][license-image]][license-url]
+[![build][build-image]][build-url]
 
 ## About
 
@@ -29,3 +30,5 @@ To enable logging for the framework, add the following option to the above comma
 
 [license-image]: https://img.shields.io/github/license/mashape/apistatus.svg?style=flat
 [license-url]: https://github.com/JedS6391/LGP/blob/master/LICENSE
+[build-image]: https://img.shields.io/github/workflow/status/JedS6391/LGP-examples/CI
+[build-url]: https://github.com/JedS6391/LGP-examples/actions/workflows/ci.yml
