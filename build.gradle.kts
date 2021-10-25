@@ -33,7 +33,6 @@ dependencies {
     implementation("nz.co.jedsimson.lgp:lib:$frameworkVersion:sources")
 
     // Logging
-//    implementation("io.github.microutils:kotlin-logging-jvm:2.0.10")
     implementation("org.slf4j:slf4j-simple:1.7.29")
 }
 
